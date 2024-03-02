@@ -1,4 +1,4 @@
-- name : Configure Docker on ubuntu Instances
+- name : Configure Docker on EC2 Instances
   hosts : all
   become: true
   connection : ssh
@@ -8,13 +8,11 @@
 
   - name : Install Docker
     command : sudo apt-get install -y docker.io
-    become : yes
-    become_user : root
 
   - name : Start Docker Service
-    command : sudo service docker start
+    command : sudo systemctl start docker
     become : yes
     become_user : root
 
   - name: Deploy Docker Container
-    command: docker run -itd -p 8089:8082 geethgulabrathod/health-care:1.0
+    command: docker run -itd -p 8087:8082 geethgulabrathod/health-care:1.0
