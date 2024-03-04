@@ -121,7 +121,9 @@ resource "aws_instance" "web" {
      sudo apt-get update -y
      sudo apt install docker.io -y
      sudo systemctl enable docker
-     sudo docker run -itd -p 8085:8081 geethgulabrathod/health_c:1.0
+     sudo docker run -itd -p 8040:8082 geethgulabrathod/health_c:1.0
+     sudo docker start $(docker ps -aq)
+
  EOF
  tags = {
   Name = "ggrg"
