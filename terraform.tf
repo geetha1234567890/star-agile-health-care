@@ -1,4 +1,3 @@
-#Initialize Terraform
 terraform {
   required_providers {
     aws = {
@@ -8,62 +7,40 @@ terraform {
   }
 }
 
-# Configure the AWS provider
-provider "aws" {
-  region = "ap-south-1"
-}
-# Creating a VPC
-resource "aws_vpc" "proj-vpc" {
- cidr_block = "10.0.0.0/16"
+resource "aws_vpc" "main" {
+  cidr_block = "10.0.0.0/16"
 }
 
-# Create an Internet Gateway
-resource "aws_internet_gateway" "proj-ig" {
- vpc_id = aws_vpc.proj-vpc.id
- tags = {
- Name = "gateway1"
- }
+resource "aws_internet_gateway" "gw" {
+  vpc_id = aws_vpc.main.id
 }
 
-# Setting up the route table
-resource "aws_route_table" "proj-rt" {
- vpc_id = aws_vpc.proj-vpc.id
- route {
- # pointing to the internet
- cidr_block = "0.0.0.0/0"
- gateway_id = aws_internet_gateway.proj-ig.id
- }
- route {
- ipv6_cidr_block = "::/0"
- gateway_id = aws_internet_gateway.proj-ig.id
- }
- tags = {
- Name = "rt1"
- }
+resource "aws_route_table" "rt" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.gw.id
+  }
 }
 
-# Setting up the subnet
-resource "aws_subnet" "proj-subnet" {
- vpc_id = aws_vpc.proj-vpc.id
- cidr_block = "10.0.1.0/24"
- availability_zone = "ap-south-1a"
- tags = {
- Name = "subnet1"
- }
+resource "aws_subnet" "subnet" {
+  vpc_id     = aws_vpc.main.id
+  cidr_block = "10.0.1.0/24"
+  availability_zone = "ap-south-1a"
 }
 
-# Associating the subnet with the route table
-resource "aws_route_table_association" "proj-rt-sub-assoc" {
-subnet_id = aws_subnet.proj-subnet.id
-route_table_id = aws_route_table.proj-rt.id
+resource "aws_route_table_association" "a" {
+  subnet_id      = aws_subnet.subnet.id
+  route_table_id = aws_route_table.rt.id
 }
 
-# Creating a Security Group
-resource "aws_security_group" "proj-sg" {
- name = "proj-sg"
- description = "Enable web traffic for the project"
- vpc_id = aws_vpc.proj-vpc.id
- ingress {
+resource "aws_security_group" "sg" {
+  name        = "allow_tls"
+  description = "Allow TLS inbound traffic"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -76,71 +53,69 @@ resource "aws_security_group" "proj-sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
- ingress {
- description = "HTTPS traffic"
- from_port = 443
- to_port = 443
- protocol = "tcp"
- cidr_blocks = ["0.0.0.0/0"]
- }
- ingress {
- description = "HTTP traffic"
- from_port = 0
- to_port = 65000
- protocol = "tcp"
- cidr_blocks = ["0.0.0.0/0"]
- }
- ingress {
- description = "Allow port 80 inbound"
- from_port   = 80
- to_port     = 80
- protocol    = "tcp"
- cidr_blocks = ["0.0.0.0/0"]
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
- ingress {
- description = "Allow port 8085 inbound"
- from_port   = 8085
- to_port     = 8085
- protocol    = "tcp"
- cidr_blocks = ["0.0.0.0/0"]
-}
- egress {
- from_port = 0
- to_port = 0
- protocol = "-1"
- cidr_blocks = ["0.0.0.0/0"]
- ipv6_cidr_blocks = ["::/0"]
- }
- tags = {
- Name = "proj-sg1"
- }
-}
 
-# Creating a new network interface
-resource "aws_network_interface" "proj-ni" {
- subnet_id = aws_subnet.proj-subnet.id
- private_ips = ["10.0.1.10"]
- security_groups = [aws_security_group.proj-sg.id]
-}
+  ingress {
+    from_port   = 0
+    to_port     = 65000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-# Attaching an elastic IP to the network interface
-resource "aws_eip" "proj-eip" {
- vpc = true
- network_interface = aws_network_interface.proj-ni.id
- associate_with_private_ip = "10.0.1.10"
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
 }
 
+resource "aws_network_interface" "foo" {
+  subnet_id       = aws_subnet.subnet.id
+  private_ips     = ["10.0.1.50"]  
+  security_groups = [aws_security_group.sg.id]
+}
 
-# Creating an ubuntu EC2 instance
+
+resource "aws_eip" "ip" {
+  domain   = "vpc"
+  network_interface       = aws_network_interface.foo.id
+  associate_with_private_ip = "10.0.1.50"  
+}
+
 resource "aws_instance" "web" {
   ami           = "ami-03bb6d83c60fc5f7c" 
   instance_type = "t2.micro"
   availability_zone = "ap-south-1a"
   key_name = "my_keypair"
- network_interface {
- device_index = 0
- network_interface_id = aws_network_interface.proj-ni.id
- }
+
+
+  network_interface {
+    device_index          = 0
+    network_interface_id  = aws_network_interface.foo.id
+  }
+
  user_data  = <<-EOF
  #!/bin/bash
      sudo apt-get update -y
